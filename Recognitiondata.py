@@ -1,80 +1,64 @@
 import cv2
 import numpy as np
-import sqlite3
 import os
+import sqlite3
+from PIL import Image
 
-
-def insertOrUpdate(id, name, yearofbirth):
-    conn = sqlite3.connect('C:/Users/ASUS/PycharmProjects/face recognition-ok/Data.db')
-
-    query = "SELECT * FROM People WHERE ID=" + id
-    cusror = conn.execute(query)
-
-    isRecordExist = 0
-
-    for row in cusror:
-        isRecordExist = 1
-
-    if (isRecordExist == 0):
-        query = "INSERT INTO People(Id,Name, YearOfBirth) Values(" + id + ",'" + name + "','" + yearofbirth + "')"
-    else:
-        query = "UPDATE People SET Name='" + name + "' YearOfBirth='" + yearofbirth + "' WHERE ID=" + id
-
-    conn.execute(query)
-    conn.commit()
-    conn.close()
-
-
-# load tv
+# Tranning hình ảnh nhận diện
+# Thư viện nhận diện khuôn mặt
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+recognizer = cv2.face.LBPHFaceRecognizer_create()
 
-# cap = cv2.VideoCapture(0)
-cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # captureDevice = camera
+recognizer.read('recognizer/trainningData.yml')
 
-# insert to db
-id = input("Nhập ID: ")
-name = input("Nhập Name: ")
-yearofbirth = input("Nhập năm sinh: ")
-insertOrUpdate(id, name, yearofbirth)
 
-sampleNum = 0
+# get data from sqlite by ID
+def getProfile(id):
+    conn = sqlite3.connect('C:/Users/ASUS/PycharmProjects/face recognition-ok/Data.db')
+    query = "SELECT * FROM People WHERE ID=" + str(id)
+    cursor = conn.execute(query)
+
+    profile = None
+
+    for row in cursor:
+        profile = row
+
+    conn.close()
+    return profile
+
+
+cap = cv2.VideoCapture(0)
+
+fontface = cv2.FONT_HERSHEY_SIMPLEX
 
 while (True):
+    # camera read
     ret, frame = cap.read()
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+    faces = face_cascade.detectMultiScale(gray)
 
     for (x, y, w, h) in faces:
         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-        if not os.path.exists('dataSet'):
-            os.makedirs('dataSet')
+        roi_gray = gray[y:y + h, x:x + w]
 
-        sampleNum += 1
+        id, confidence = recognizer.predict(roi_gray)
 
-        cv2.imwrite('dataSet/User.' + str(id) + '.' + str(sampleNum) + ' .jpg', gray[y: y + h, x: x + w])
+        if confidence < 90:
+            profile = getProfile(id)
+            if (profile != None):
+                # cv2.putText(frame, id, (10,30), fontface, 1, (0, 0, 255), 2)
+                cv2.putText(frame, str(profile[1]) + ", Year: " + str(profile[2]), (x + 10, y + h + 30), fontface, 1,
+                            (0, 255, 0), 2)
 
-    cv2.imshow('frame', frame)
-    cv2.waitKey(1)
+        else:
+            cv2.putText(frame, "No", (x + 10, y + h + 30), fontface, 1, (0, 0, 255), 2)
 
-    if sampleNum > 200:
+    cv2.imshow('image', frame)
+    if cv2.waitKey(1) == ord('q'):
         break
 
-cap.release()
+cv2.release()
 cv2.destroyAllWindows()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
